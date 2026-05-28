@@ -308,3 +308,5 @@ If you use this in your research, please cite the paper:
   year={2023}
 }
 ```
+
+$ (venv) may2@may2-System-Product-Name:~/Desktop/WhisperX/whisperX$ python phoWhisper.py voiceKol2.MP3
