@@ -88,7 +88,8 @@ async def health_check():
 @app.post("/transcribe", tags=["Transcription"])
 async def transcribe_audio(
     background_tasks: BackgroundTasks,
-    file: UploadFile = File(..., description="File âm thanh hoặc video cần nhận dạng (mp3, wav, m4a, mp4,...)")
+    file: UploadFile = File(..., description="File âm thanh hoặc video cần nhận dạng (mp3, wav, m4a, mp4,...)"),
+    text_file: UploadFile = File(None, description="File kịch bản .txt tùy chọn để căn chỉnh thời gian chính xác 100%")
 ):
     """
     Nhận file âm thanh, tiến hành nhận dạng và trả về file ZIP chứa cả file .txt và .srt.
@@ -136,10 +137,27 @@ async def transcribe_audio(
         # 3. Load audio sử dụng whisperx
         audio = whisperx.load_audio(temp_audio_path)
 
+        # Đọc nội dung file kịch bản tùy chọn nếu được gửi lên
+        custom_text = None
+        if text_file is not None:
+            try:
+                text_content = await text_file.read()
+                custom_text = text_content.decode("utf-8").strip()
+                print(f"[{request_id}] Nhận kèm file kịch bản: {text_file.filename} ({len(custom_text)} ký tự)")
+            except Exception as e:
+                print(f"[{request_id}] Lỗi đọc file kịch bản: {e}")
+                raise HTTPException(status_code=400, detail=f"Không thể đọc file kịch bản (.txt). Đảm bảo file được mã hóa UTF-8.")
+
         # 4. Transcribe (Nhận dạng)
         result = model.transcribe(audio, batch_size=16)
         if "language" not in result:
             result["language"] = "vi"
+
+        # Nếu có văn bản kịch bản tùy chỉnh, tiến hành so khớp với mốc thời gian của Whisper
+        if custom_text:
+            print(f"[{request_id}] Đang khớp kịch bản của bạn với mốc thời gian nhận diện...")
+            from phoWhisper import align_custom_text
+            result["segments"] = align_custom_text(result["segments"], custom_text)
 
         # 5. Align (Căn chỉnh thời gian)
         result = whisperx.align(
